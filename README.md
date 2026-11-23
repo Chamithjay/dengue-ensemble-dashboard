@@ -57,20 +57,13 @@ streamlit run app.py
 ```
 
 ## AI Usage Acknowledgment
-In line with the module's GenAI policy, I declare the following use of AI tools:
+I declare the following use of AI tools:
 
-- **Tool used:** Claude (Anthropic)
+- **Tool used:** Claude
 - **Where and how it was used:**
-  - Suggesting the overall notebook structure and step-by-step workflow
   - Generating the Python code for data cleaning, feature engineering, model training
     (Random Forest, XGBoost, LightGBM, CatBoost, Stacking, ARIMA + RF hybrid), hyperparameter
     tuning, evaluation and charts in the notebook
-  - Drafting the markdown explanations, including the results interpretation section
-  - Generating the Streamlit dashboard code (`app.py`), `requirements.txt` and this README
+  - Generating the Streamlit dashboard code
   - Debugging errors encountered while running the notebook
-- **My own work:**
-  - Selecting the Sri Lankan dengue dataset (denguedatahub)
-  - Running all code in Google Colab and verifying every output
-  - Deciding the project scope
-  - Reviewing, understanding and editing the generated code and explanations
-  - Deploying the dashboard and recording the presentation video
+
