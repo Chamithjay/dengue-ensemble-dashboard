@@ -61,9 +61,8 @@ h1, h2, h3 { color: #0F172A; }
 """, unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------------- loading
+# loading
 def load_one(name, filename):
-    # XGBoost is loaded from its native JSON format when available (portable across OS)
     if name.startswith("XGBoost") and (MODEL_DIR / "xgboost.json").exists():
         from xgboost import XGBRegressor
         model = XGBRegressor()
@@ -78,7 +77,7 @@ def load_models():
     for name, f in MODEL_FILES.items():
         try:
             models[name] = load_one(name, f)
-        except Exception as e:  # keep the dashboard running if one model file is bad
+        except Exception as e: 
             failed[name] = f"{type(e).__name__}: {e}"
     hybrid_rf = joblib.load(MODEL_DIR / "hybrid_rf.pkl")
     meta = joblib.load(MODEL_DIR / "metadata.pkl")
@@ -134,7 +133,7 @@ def to_cases(log_value):
     return float(np.clip(np.expm1(log_value), 0, None))
 
 
-# ---------------------------------------------------------------- app
+# app
 models, hybrid_rf, meta, failed = load_models()
 results, importance, data, preds = load_tables()
 for name, err in failed.items():
@@ -146,12 +145,8 @@ best_model = results["RMSE"].idxmin()
 st.sidebar.title("🦟 Dengue Ensemble Dashboard")
 page = st.sidebar.radio("Go to", ["🏠 Overview", "📊 Model Comparison",
                                   "🔍 Feature Importance", "🔮 Live Prediction"])
-st.sidebar.markdown("---")
-st.sidebar.caption("Data: `srilanka_weekly_data` from the **denguedatahub** R package "
-                   "(Epidemiology Unit, Sri Lanka).")
-st.sidebar.caption("Models: Random Forest · XGBoost · LightGBM · CatBoost · Stacking · ARIMA + RF hybrid")
 
-# ---------------------------------------------------------------- overview
+#  overview
 if page == "🏠 Overview":
     st.title("Forecasting Weekly Dengue Cases in Sri Lanka")
     st.markdown("Comparing **Bagging, Boosting, Stacking and Hybrid** ensemble models for "
@@ -204,7 +199,7 @@ elif page == "📊 Model Comparison":
     fig.update_layout(xaxis_range=[lo - pad, hi + pad], yaxis={"categoryorder": "array",
                       "categoryarray": ordered["Model"][::-1]})
     st.plotly_chart(fig, use_container_width=True)
-    st.caption("The x-axis is zoomed in: all models are within about 1.5% of each other on RMSE.")
+    st.caption("All models are within about 1.5% of each other on RMSE.")
 
     st.subheader("Actual vs predicted")
     region = st.selectbox("Region", ["All Sri Lanka"] + districts, key="cmp_region")
@@ -254,54 +249,49 @@ elif page == "🔍 Feature Importance":
                                      "CatBoost": MODEL_COLORS["CatBoost (Boosting)"]})
     fig.update_layout(yaxis={"categoryorder": "array", "categoryarray": list(top[::-1])})
     st.plotly_chart(fig, use_container_width=True)
-    st.info("Recent cases (`roll_mean_4`, `lag_1`) dominate most models, so forecasts react to "
-            "outbreaks about a week late. LightGBM spreads importance more widely across "
-            "seasonality (`week_sin/cos`) and national outbreak signals (`national_lag_1`). "
-            "Note: LightGBM counts splits, while the other models measure error reduction.")
 
 # ---------------------------------------------------------------- prediction
 elif page == "🔮 Live Prediction":
     st.title("Live Prediction: Next Week's Dengue Cases")
     district = st.selectbox("District / region", districts,
                             index=districts.index("Colombo") if "Colombo" in districts else 0)
-
+ 
     hist = data[data["district"] == district].reset_index(drop=True)
     last_date = hist["start_date"].iloc[-1]
     forecast_date = last_date + pd.Timedelta(days=7)
     national_default = int(data[data["start_date"] == last_date]["cases"].sum())
-    st.markdown(f"Forecasting the week starting **{forecast_date.date()}**. "
-                "The inputs below are pre-filled with the latest reported data; "
-                "edit them to explore *what-if* scenarios.")
-
-    st.markdown("**Cases in the last 8 weeks** (oldest → newest)")
+    st.markdown("Predicting **next week's** dengue cases from the most recent reported weeks.")
+ 
+    st.markdown("**Reported cases in the last 8 weeks**")
     recent = hist.tail(8)
     history = []
     cols = st.columns(8)
     for i, (col, (_, r)) in enumerate(zip(cols, recent.iterrows())):
-        history.append(col.number_input(r["start_date"].strftime("%d %b"), min_value=0,
+        label = "Last week" if i == 7 else f"{8 - i} weeks ago"
+        history.append(col.number_input(label, min_value=0,
                                         value=int(r["cases"]), step=1,
                                         key=f"h{i}_{district}"))
-
+ 
     c1, c2 = st.columns(2)
     last_year = c1.number_input("Cases in the same week last year", min_value=0,
                                 value=int(hist["cases"].iloc[-52]), step=1,
                                 key=f"ly_{district}")
     national = c2.number_input("All-island cases last week", min_value=0,
                                value=national_default, step=10, key=f"nat_{district}")
-
+ 
     X = build_features(history, last_year, national, forecast_date, district, FEATURES)
     forecasts = {name: to_cases(m.predict(X)[0]) for name, m in models.items()}
-
+ 
     # Hybrid: ARIMA one-week-ahead forecast + Random Forest residual correction
     post = hist.loc[hist["year"] >= 2023, "log_cases"].values.copy()
     post[-8:] = np.log1p(np.asarray(history, dtype=float))
     arima_log = float(fit_arima(district).append(post, refit=False).forecast(1)[0])
     forecasts[HYBRID] = to_cases(arima_log + hybrid_rf.predict(X)[0])
-
+ 
     out = (pd.DataFrame({"Model": list(forecasts), "Forecast": list(forecasts.values())})
            .assign(Paradigm=lambda d: d["Model"].map(PARADIGM))
            .sort_values("Forecast"))
-
+ 
     st.markdown("---")
     m1, m2, m3 = st.columns(3)
     best_live = best_model if best_model in forecasts else HYBRID
@@ -312,7 +302,7 @@ elif page == "🔮 Live Prediction":
     m2.metric("Average of all models", f"{out['Forecast'].mean():.0f} cases")
     m3.metric("Range across models",
               f"{out['Forecast'].min():.0f} – {out['Forecast'].max():.0f}")
-
+ 
     left, right = st.columns(2)
     with left:
         fig = px.bar(out, x="Forecast", y="Model", color="Paradigm", orientation="h",
@@ -320,13 +310,14 @@ elif page == "🔮 Live Prediction":
                      color_discrete_map=PARADIGM_COLORS)
         st.plotly_chart(fig, use_container_width=True)
     with right:
+        week_labels = [f"-{8 - i}" for i in range(8)] + ["Next"]
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=recent["start_date"], y=history, mode="lines+markers",
+        fig.add_trace(go.Scatter(x=week_labels[:8], y=history, mode="lines+markers",
                                  name="Reported (inputs)", line=dict(color=ACTUAL_COLOR)))
         for name, value in forecasts.items():
-            fig.add_trace(go.Scatter(x=[last_date, forecast_date], y=[history[-1], value],
+            fig.add_trace(go.Scatter(x=[week_labels[7], week_labels[8]], y=[history[-1], value],
                                      mode="lines+markers", name=name,
                                      line=dict(dash="dot", color=MODEL_COLORS.get(name))))
         fig.update_layout(title="Recent weeks and next-week forecasts",
-                          xaxis_title="Week", yaxis_title="Cases")
+                          xaxis_title="Weeks (relative to now)", yaxis_title="Cases")
         st.plotly_chart(fig, use_container_width=True)
