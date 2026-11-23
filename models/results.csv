@@ -1,0 +1,8 @@
+,MAE,RMSE,R2
+Hybrid (ARIMA + RF),12.074,27.714,0.84
+LightGBM (Boosting),11.953,27.896,0.838
+XGBoost (Boosting),12.0,27.974,0.837
+Stacking (RF + LGBM + Ridge),11.828,27.983,0.837
+Random Forest (Bagging),12.097,28.021,0.837
+CatBoost (Boosting),11.965,28.134,0.835
+Naive (last week),12.608,28.947,0.826
